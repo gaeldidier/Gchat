@@ -1,3 +1,7 @@
+
+import eventlet
+eventlet.monkey_patch()
+
 from flask import Flask, render_template, redirect, url_for, flash, request
 from flask_socketio import SocketIO, send
 from flask_sqlalchemy import SQLAlchemy
@@ -10,6 +14,10 @@ import os
 
 
 
+
+import eventlet
+eventlet.monkey_patch()
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 # Database configuration
@@ -20,7 +28,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Profile picture upload folder
 app.config['PROFILE_PIC_UPLOAD_FOLDER'] = os.path.join(basedir, 'static', 'profile_pics')
 db = SQLAlchemy(app)
-socketio = SocketIO(app)
+socketio = SocketIO(app, async_mode='eventlet')
 
 # User model
 class User(UserMixin, db.Model):
@@ -362,26 +370,52 @@ def handle_leave_room(data):
 
 @socketio.on('send_message')
 def handle_send_message(data):
+    import datetime
     room = data['room']
     message = data['message']
     sender = data['sender']
+    # Parse friend_id from room name: chat_<user1>_<user2>
+    try:
+        parts = room.split('_')
+        # Find the friend id (not current user)
+        user_ids = [int(x) for x in parts[1:3] if x.isdigit()]
+        friend_id = [uid for uid in user_ids if uid != current_user.id][0]
+    except Exception:
+        friend_id = None
     # Save message to DB
-    friend_id = int(room.replace('chat_', '').replace(str(current_user.id), '').replace('_', ''))
-    db.session.add(PrivateMessage(sender_id=current_user.id, receiver_id=friend_id, content=message, read=False))
+    msg = PrivateMessage(sender_id=current_user.id, receiver_id=friend_id, content=message, read=False)
+    db.session.add(msg)
     db.session.commit()
+    # Format timestamp
+    now = datetime.datetime.now().strftime('%H:%M')
     emit('receive_message', {
         'user': sender,
         'text': message,
         'profile_pic': current_user.profile_pic,
-        'time': db.func.now().strftime('%H:%M'),
+        'time': now,
         'read': False
     }, room=room)
+    # Optionally, emit to receiver to update unread count/notification
 
 @socketio.on('typing')
 def handle_typing(data):
     room = data['room']
     sender = data['sender']
     emit('user_typing', {'user': sender}, room=room, include_self=False)
+
+# Real-time read receipt update
+@socketio.on('mark_read')
+def handle_mark_read(data):
+    room = data['room']
+    friend_id = data.get('friend_id')
+    # Mark all messages from friend to current user as read
+    unread = PrivateMessage.query.filter_by(sender_id=friend_id, receiver_id=current_user.id, read=False).all()
+    for m in unread:
+        m.read = True
+    if unread:
+        db.session.commit()
+    # Notify both users in the room
+    emit('read_receipt', {'reader': current_user.username}, room=room)
 
 @socketio.on('notify')
 def handle_notify(data):
@@ -393,4 +427,5 @@ if __name__ == '__main__':
     # Create database tables if they don't exist
     with app.app_context():
         db.create_all()
-    socketio.run(app, debug=True)
+    print(' * Running with eventlet for real-time WebSocket support')
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)

@@ -50,3 +50,18 @@ socket.on('notification', (data) => {
 
 // Initial load
 loadHistory();
+
+// Mark messages as read when window is focused or chat is opened
+window.addEventListener('focus', () => {
+    socket.emit('mark_read', {room, friend_id: friendId});
+});
+
+// Also mark as read after sending a message (to update both sides)
+socket.emit('mark_read', {room, friend_id: friendId});
+
+// Listen for real-time read receipts
+socket.on('read_receipt', (data) => {
+    // Optionally, reload messages or update UI to show read status
+    // For now, reload history to update read checkmarks
+    loadHistory();
+});
