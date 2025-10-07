@@ -12,12 +12,6 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.utils import secure_filename
 import os
 
-
-
-
-import eventlet
-eventlet.monkey_patch()
-
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 # Database configuration

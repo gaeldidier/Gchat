@@ -4,4 +4,3 @@ eventlet
 Flask-SQLAlchemy
 Flask-WTF
 Flask-Login
-gunicorn

@@ -4,22 +4,30 @@ const socket = io();
 const room = `chat_${friendId}_${userName}`;
 socket.emit('join_room', {room});
 
+const chatBox = document.getElementById('messages');
+const input = document.getElementById('text');
+const sendBtn = document.getElementById('send');
+
 function addMessage(m) {
     chatBox.appendChild(renderMessage(m));
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-chatForm.addEventListener('submit', (e) => {
-    e.preventDefault();
+sendBtn.addEventListener('click', sendMessageHandler);
+input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendMessageHandler();
+});
+
+function sendMessageHandler() {
     const text = input.value.trim();
     if (!text) return;
     socket.emit('send_message', {room, message: text, sender: userName});
     input.value = '';
-});
+}
 
 socket.on('receive_message', (m) => {
     addMessage(m);
-    if (m.user !== userName) showNotification(`${m.user}: ${m.text}`);
+    if (m.user !== userName) showNotification && showNotification(`${m.user}: ${m.text}`);
 });
 
 // Typing indicator
@@ -45,11 +53,13 @@ socket.on('user_typing', (data) => {
 
 // Global notification
 socket.on('notification', (data) => {
-    showNotification(data.notification);
+    if (typeof showNotification === 'function') {
+        showNotification(data.notification);
+    }
 });
 
 // Initial load
-loadHistory();
+if (typeof loadHistory === 'function') loadHistory();
 
 // Mark messages as read when window is focused or chat is opened
 window.addEventListener('focus', () => {
@@ -63,5 +73,5 @@ socket.emit('mark_read', {room, friend_id: friendId});
 socket.on('read_receipt', (data) => {
     // Optionally, reload messages or update UI to show read status
     // For now, reload history to update read checkmarks
-    loadHistory();
+    if (typeof loadHistory === 'function') loadHistory();
 });

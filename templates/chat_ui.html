@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Chat UI</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5617793567158220"
+     crossorigin="anonymous"></script>
   <style>
     :root{
       --bg: #0f1320;
@@ -48,75 +50,12 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
   <script>
-    const friendId = {{ friend.id }};
-    const api = `/chatui/${friendId}/messages`;
-    const msgsEl = document.getElementById('messages');
-    const textEl = document.getElementById('text');
-    const sendBtn = document.getElementById('send');
-    const userName = {{ user.username|tojson }};
-
-    function renderMessage(m, idx){
-      const wrap = document.createElement('div');
-      const isMe = m.user === userName;
-      wrap.className = 'message ' + (isMe ? 'me' : 'you');
-      // Avatar
-      const avatar = document.createElement('img');
-      avatar.className = 'avatar';
-      avatar.src = m.profile_pic ? `/static/profile_pics/${m.profile_pic}` : '';
-      avatar.alt = m.user;
-      // Bubble
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-      bubble.textContent = m.text;
-      // Timestamp
-      const time = document.createElement('span');
-      time.className = 'timestamp';
-      time.textContent = m.time;
-      bubble.appendChild(time);
-      // Read receipt (only for my messages)
-      if (isMe && m.read !== undefined) {
-        const receipt = document.createElement('span');
-        receipt.className = 'read-receipt';
-        receipt.textContent = m.read ? '✔✔' : '✔';
-        bubble.appendChild(receipt);
-      }
-      // Arrange
-      if (isMe) {
-        wrap.appendChild(bubble);
-        wrap.appendChild(avatar);
-      } else {
-        wrap.appendChild(avatar);
-        wrap.appendChild(bubble);
-      }
-      return wrap;
-    }
-
-    async function loadHistory(){
-      const res = await fetch(api);
-      const data = await res.json();
-      msgsEl.innerHTML = '';
-      (data.history || []).forEach((m, i)=> {
-        msgsEl.appendChild(renderMessage(m, i));
-      });
-      msgsEl.scrollTop = msgsEl.scrollHeight;
-    }
-
-    async function sendMessage(){
-      const text = textEl.value.trim();
-      if(!text) return;
-      const payload = { text };
-      const res = await fetch(api, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      if(res.ok){
-        textEl.value = '';
-        await loadHistory();
-      }
-    }
-
-    sendBtn.addEventListener('click', sendMessage);
-    textEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ sendMessage(); } });
-
-    loadHistory();
+    // Pass server-side variables to JS for chat.js
+    window.friendId = friend.id;
+  window.userName = {{ user.username|tojson }};
   </script>
+  <script src="/static/chat.js"></script>
 </body>
 </html>
