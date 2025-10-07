@@ -1,27 +1,52 @@
-// Simple polling for new messages (demo purpose)
-function pollMessages(friendId) {
-    setInterval(function() {
-        fetch(`/chat/${friendId}/messages`)
-            .then(response => response.json())
-            .then(data => {
-                const chatBox = document.getElementById('chat-box');
-                chatBox.innerHTML = '';
-                data.messages.forEach(msg => {
-                    const div = document.createElement('div');
-                    div.innerHTML = `<strong>${msg.sender}:</strong> ${msg.content}`;
-                    chatBox.appendChild(div);
-                });
-                chatBox.scrollTop = chatBox.scrollHeight;
-            });
-    }, 2000);
-}
 
-// Auto-scroll on new message
-function scrollToBottom() {
-    const chatBox = document.getElementById('chat-box');
+// --- SOCKET.IO REAL-TIME ---
+const socket = io();
+const room = `chat_${friendId}_${userName}`;
+socket.emit('join_room', {room});
+
+function addMessage(m) {
+    chatBox.appendChild(renderMessage(m));
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    scrollToBottom();
+chatForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    socket.emit('send_message', {room, message: text, sender: userName});
+    input.value = '';
 });
+
+socket.on('receive_message', (m) => {
+    addMessage(m);
+    if (m.user !== userName) showNotification(`${m.user}: ${m.text}`);
+});
+
+// Typing indicator
+input.addEventListener('input', () => {
+    socket.emit('typing', {room, sender: userName});
+});
+
+socket.on('user_typing', (data) => {
+    let indicator = document.getElementById('typing-indicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'typing-indicator';
+        indicator.className = 'text-muted mb-2';
+        indicator.innerText = `${data.user} is typing...`;
+        chatBox.appendChild(indicator);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+    clearTimeout(window._typingTimeout);
+    window._typingTimeout = setTimeout(() => {
+        if (indicator) indicator.remove();
+    }, 1500);
+});
+
+// Global notification
+socket.on('notification', (data) => {
+    showNotification(data.notification);
+});
+
+// Initial load
+loadHistory();

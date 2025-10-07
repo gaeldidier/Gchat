@@ -1,9 +1,3 @@
-# ...existing code...
-
-
-
-
-
 from flask import Flask, render_template, redirect, url_for, flash, request
 from flask_socketio import SocketIO, send
 from flask_sqlalchemy import SQLAlchemy
@@ -331,6 +325,69 @@ def group_chat(group_id):
             db.session.commit()
     messages = GroupMessage.query.filter_by(group_id=group_id).order_by(GroupMessage.timestamp.asc()).all()
     return render_template('group_chat.html', group=group, messages=messages)
+
+# UI messages endpoint
+@app.route('/chatui/<int:friend_id>/messages')
+@login_required
+def chat_ui_messages(friend_id):
+    friend = User.query.get_or_404(friend_id)
+    messages = PrivateMessage.query.filter(
+        ((PrivateMessage.sender_id == current_user.id) & (PrivateMessage.receiver_id == friend_id)) |
+        ((PrivateMessage.sender_id == friend_id) & (PrivateMessage.receiver_id == current_user.id))
+    ).order_by(PrivateMessage.timestamp.asc()).all()
+    history = []
+    for m in messages:
+        is_me = m.sender_id == current_user.id
+        history.append({
+            "user": current_user.username if is_me else friend.username,
+            "text": m.content,
+            "time": m.timestamp.strftime('%H:%M'),
+            "read": m.read if is_me else None,
+            "profile_pic": (current_user.profile_pic if is_me else friend.profile_pic)
+        })
+    return {"history": history}
+
+# --- SOCKET.IO EVENTS FOR REAL-TIME CHAT ---
+from flask_socketio import emit, join_room, leave_room
+
+@socketio.on('join_room')
+def handle_join_room(data):
+    room = data['room']
+    join_room(room)
+
+@socketio.on('leave_room')
+def handle_leave_room(data):
+    room = data['room']
+    leave_room(room)
+
+@socketio.on('send_message')
+def handle_send_message(data):
+    room = data['room']
+    message = data['message']
+    sender = data['sender']
+    # Save message to DB
+    friend_id = int(room.replace('chat_', '').replace(str(current_user.id), '').replace('_', ''))
+    db.session.add(PrivateMessage(sender_id=current_user.id, receiver_id=friend_id, content=message, read=False))
+    db.session.commit()
+    emit('receive_message', {
+        'user': sender,
+        'text': message,
+        'profile_pic': current_user.profile_pic,
+        'time': db.func.now().strftime('%H:%M'),
+        'read': False
+    }, room=room)
+
+@socketio.on('typing')
+def handle_typing(data):
+    room = data['room']
+    sender = data['sender']
+    emit('user_typing', {'user': sender}, room=room, include_self=False)
+
+@socketio.on('notify')
+def handle_notify(data):
+    room = data['room']
+    notification = data['notification']
+    emit('notification', {'notification': notification}, room=room)
 
 if __name__ == '__main__':
     # Create database tables if they don't exist
